@@ -1,0 +1,32 @@
+name: Laadpaal Logger
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # elk uur
+  workflow_dispatch:      # handmatig starten
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run logger
+        run: python log_laadpaal_imbrexstraat.py
+
+      - name: Commit updated CSV
+        run: |
+          git config user.email "bot@github.com"
+          git config user.name "GitHub Action"
+          git add laadpaal_imbrexstraat_log.csv
+          git commit -m "Update log" || echo "No changes"
+          git push
