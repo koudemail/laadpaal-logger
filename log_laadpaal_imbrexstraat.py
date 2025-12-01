@@ -21,26 +21,44 @@ HEADERS = {
 
 
 def haal_aantal_beschikbaar():
-    """Haalt via de Chargefinder API op hoeveel connectors beschikbaar zijn."""
-    resp = requests.get(API_URL, headers=HEADERS, timeout=10)
-    resp.raise_for_status()
+    """Haalt via de Chargefinder API op hoeveel connectors beschikbaar zijn.
+    Geeft -1 terug als er iets misgaat, zodat we dat kunnen loggen.
+    """
+    try:
+        resp = requests.get(API_URL, headers=HEADERS, timeout=10)
+    except Exception as e:
+        print(f"[ERROR] HTTP request naar Chargefinder faalde: {e}")
+        return -1
 
-    data = resp.json()
-    # Aanname: elk element in 'data' is een connector met een 'status' veld.
-    # In publieke voorbeelden betekent:
-    #   status == 2  => beschikbaar
-    beschikbaar = 0
+    print(f"[DEBUG] HTTP status: {resp.status_code}")
+
+    # Als de status geen 200 is, toch loggen dat er iets mis is
+    if resp.status_code != 200:
+        print(f"[ERROR] Onverwachte status code {resp.status_code}")
+        return -1
+
+    try:
+        data = resp.json()
+    except ValueError as e:
+        print(f"[ERROR] Kon JSON niet parsen: {e}")
+        return -1
+
+    # Data kan of een lijst zijn, of een dict met 'connectors'
     if isinstance(data, dict) and "connectors" in data:
-        # fallback als API structuur een 'connectors'-veld heeft
         connectors = data.get("connectors", [])
     else:
-        connectors = data
+        connectors = data if isinstance(data, list) else []
 
+    print(f"[DEBUG] Aantal connectors in response: {len(connectors)}")
+
+    beschikbaar = 0
     for connector in connectors:
         status = connector.get("status")
+        # Veel voorbeelden gebruiken status == 2 als 'vrij'
         if status == 2:
             beschikbaar += 1
 
+    print(f"[DEBUG] Aantal beschikbare connectors (status==2): {beschikbaar}")
     return beschikbaar
 
 
@@ -62,13 +80,15 @@ def log_record(aantal_beschikbaar):
 
 
 def main():
+    # We zorgen dat er ALTIJD iets gelogd wordt, ook bij fouten.
     try:
         aantal = haal_aantal_beschikbaar()
-        log_record(aantal)
-        print(f"Gelogd: {aantal} van de 2 laadpunten beschikbaar.")
     except Exception as e:
-        # Foutmelding naar stdout/stderr zodat je via logs kunt zien wat er misgaat
-        print(f"Fout tijdens ophalen of loggen: {e}")
+        print(f"[ERROR] Onverwachte fout in main(): {e}")
+        aantal = -1
+
+    log_record(aantal)
+    print(f"Gelogd: {aantal} van de 2 laadpunten beschikbaar (of -1 = fout).")
 
 
 if __name__ == "__main__":
